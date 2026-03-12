@@ -1,12 +1,23 @@
-"""预测与复盘路由 — 今日预测、历史列表、某日详情、预测/复盘报告正文（从数据库读取）。"""
+"""预测与复盘路由 — 今日预测、历史列表、某日详情、预测/复盘报告正文、触发预测任务。"""
 
 from datetime import datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from storage import db as storage_db
 
 router = APIRouter()
+
+
+@router.post("/run")
+def run_predict_task():
+    """触发当日预测任务（与 CLI python main.py predict 相同）。耗时可长达数分钟，请前端设置较长超时。"""
+    from core.predict_runner import run_predict
+
+    result = run_predict(return_data=False)
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "预测任务执行失败"))
+    return {"message": "预测完成", "trade_date": result.get("trade_date"), "report_path": result.get("report_path")}
 
 
 @router.get("/today")

@@ -8,12 +8,18 @@
       <h2 class="block-title">今日推荐（预测）</h2>
       <div v-if="loading" class="loading">加载中…</div>
       <template v-else>
+        <div class="toolbar">
+          <button type="button" class="btn primary" :disabled="predicting" @click="startPredict">
+            {{ predicting ? '预测中…（约 2～5 分钟）' : '开始预测' }}
+          </button>
+          <span v-if="predictError" class="error-msg">{{ predictError }}</span>
+        </div>
         <!-- 预测报告文档（卦象、操作建议、要闻、驱动板块、推荐等） -->
         <div v-if="reportContent" class="report-section">
           <div class="report-body markdown" v-html="formattedReport"></div>
         </div>
         <!-- 无报告时仅表格；有报告时也保留表格便于快速查看 -->
-        <div v-if="!recommendations.length" class="empty">暂无今日推荐，请先运行 CLI 生成预测。</div>
+        <div v-if="!recommendations.length" class="empty">暂无今日推荐，点击上方「开始预测」执行当日预测任务。</div>
         <div v-else class="table-wrap">
           <table>
             <thead>
@@ -82,6 +88,8 @@ const summary = ref(null)
 const recommendations = ref([])
 const reportContent = ref(null)
 const loading = ref(true)
+const predicting = ref(false)
+const predictError = ref('')
 const styleMap = { aggressive: '激进', stable: '稳健', moderate: '适中' }
 
 const mdOptions = { gfm: true, breaks: true }
@@ -98,7 +106,9 @@ const formattedReport = computed(() => {
   return parse(text, mdOptions)
 })
 
-onMounted(async () => {
+async function loadToday() {
+  loading.value = true
+  predictError.value = ''
   try {
     const { data } = await predictionsApi.getToday()
     tradeDate.value = data.trade_date
@@ -110,7 +120,22 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+async function startPredict() {
+  predicting.value = true
+  predictError.value = ''
+  try {
+    await predictionsApi.runPredict()
+    await loadToday()
+  } catch (e) {
+    predictError.value = e.response?.data?.detail || e.message || '预测任务失败'
+  } finally {
+    predicting.value = false
+  }
+}
+
+onMounted(loadToday)
 </script>
 
 <style scoped>
@@ -120,6 +145,12 @@ onMounted(async () => {
 
   .block { margin-bottom: 2rem; }
   .block-title { margin: 0 0 1rem; font-size: 1rem; font-weight: 600; color: #333; padding-bottom: 0.5rem; border-bottom: 1px solid #eee; }
+
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; }
+  .btn.primary { background: #1989fa; color: #fff; }
+  .btn:disabled { opacity: 0.7; cursor: not-allowed; }
+  .error-msg { color: #ee0a24; font-size: 13px; }
 
   .report-section {
     background: #fff;

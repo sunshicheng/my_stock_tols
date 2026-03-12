@@ -40,6 +40,9 @@ export const predictionsApi = {
   getToday() {
     return api.get('/api/predictions/today')
   },
+  runPredict() {
+    return api.post('/api/predictions/run', {}, { timeout: 600000 })
+  },
   getHistory(startDate, endDate) {
     return api.get('/api/predictions/history', { params: { start_date: startDate, end_date: endDate } })
   },

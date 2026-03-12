@@ -23,94 +23,14 @@ logger.add("logs/{time:YYYY-MM-DD}.log", level="DEBUG", rotation="1 day", retent
 
 def cmd_predict():
     """执行每日预测推荐。"""
-    from core.stock_screener import screen_stocks
-    from core.fund_screener import screen_funds
-    from core.ai_analyzer import analyze_stocks, analyze_funds
-    from core.data_fetcher import get_all_a_stocks_spot, get_market_sentiment
-    from core.news_fetcher import fetch_market_news, fetch_policy_news
-    from core.report_generator import generate_prediction_report
-    from storage.db import save_recommendations, save_daily_summary_after_predict, save_daily_context
+    from core.predict_runner import run_predict
 
-    trade_date = datetime.now().strftime("%Y-%m-%d")
-    logger.info(f"===== 开始每日预测: {trade_date} =====")
-
-    # 1. 只拉取一次 A 股行情，复用于市场概况 + 股票筛选，避免二次请求导致限流/失败
-    spot_df = get_all_a_stocks_spot()
-    market_info = get_market_sentiment(spot_df)
-    stocks = screen_stocks(spot_df)
-
-    # 2. 基金筛选
-    funds = screen_funds()
-
-    # 2.5 拉取市场要闻与政策要闻，入库供后续分析，并供 AI 结合推荐
-    market_news_list = fetch_market_news(max_items=20)
-    policy_news_list = fetch_policy_news(max_items=15)
-    # 结合十四五/十五五与实时要闻，生成政策与新闻驱动板块
-    from core.sector_advisor import get_affected_sectors
-    affected_sectors = get_affected_sectors(market_news_list, policy_news_list, max_sectors=5)
-    save_daily_context(trade_date, market_news_list, policy_news_list, affected_sectors=affected_sectors)
-    if market_news_list or policy_news_list:
-        logger.info(f"已入库要闻: 市场 {len(market_news_list)} 条, 政策/宏观 {len(policy_news_list)} 条")
-    if affected_sectors:
-        logger.info(f"政策与新闻驱动板块: {[s['name'] for s in affected_sectors]}")
-
-    # 3. AI 分析（注入要闻、政策与关注板块）
-    logger.info("开始 AI 分析（含今日卦象、要闻、驱动板块）...")
-    stocks = analyze_stocks(
-        stocks, market_info,
-        market_news_list=market_news_list,
-        policy_news_list=policy_news_list,
-        affected_sectors=affected_sectors,
-    )
-    funds = analyze_funds(
-        funds,
-        market_news_list=market_news_list,
-        policy_news_list=policy_news_list,
-        affected_sectors=affected_sectors,
-    )
-
-    # 4. 存储到数据库
-    db_items = []
-    for style, items in stocks.items():
-        for s in items:
-            db_items.append({
-                "category": "stock",
-                "style": style,
-                "code": s["code"],
-                "name": s["name"],
-                "score": s.get("tech_score", 0),
-                "reason": s.get("reason", ""),
-                "ai_analysis": s.get("ai_analysis", ""),
-            })
-    for f in funds:
-        db_items.append({
-            "category": "fund",
-            "style": f.get("style", "etf"),
-            "code": f["code"],
-            "name": f["name"],
-            "score": f.get("tech_score", 0),
-            "reason": f.get("reason", ""),
-            "ai_analysis": f.get("ai_analysis", ""),
-        })
-
-    save_recommendations(trade_date, db_items)
-
-    stock_total = sum(len(items) for items in stocks.values())
-    fund_total = len(funds)
-    save_daily_summary_after_predict(trade_date, stock_total, fund_total)
-
-    # 5. 生成报告
-    logger.info("正在生成报告（含今日卦象、市场概况、要闻与驱动板块）...")
-    report_path = generate_prediction_report(
-        trade_date, stocks, funds, market_info,
-        market_news_list=market_news_list,
-        policy_news_list=policy_news_list,
-        affected_sectors=affected_sectors,
-    )
-    logger.info(f"✅ 预测完成！报告路径: {report_path}")
-
-    # 6. 控制台预览
-    _print_preview(stocks, funds)
+    result = run_predict(return_data=True)
+    if not result.get("ok"):
+        logger.error(result.get("error", "预测失败"))
+        return
+    if result.get("stocks") is not None and result.get("funds") is not None:
+        _print_preview(result["stocks"], result["funds"])
 
 
 def cmd_review(trade_date: str = None):

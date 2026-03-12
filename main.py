@@ -6,6 +6,8 @@
     python main.py review 2026-03-11 # 指定日期复盘
     python main.py schedule          # 启动定时调度
     python main.py history           # 查看近30天命中率
+    python main.py position add/list/plan  # 个人持仓与卖出计划
+    python main.py backtest [--start] [--end]  # 基于历史推荐做 AKQuant 回测
 """
 
 import argparse
@@ -234,6 +236,119 @@ def cmd_context(trade_date: str = None):
     print(f"{'='*60}\n")
 
 
+def cmd_position(args):
+    """个人持仓：添加、列表、设置卖出计划。"""
+    from core.position_manager import (
+        get_positions_with_plan,
+        add_holding,
+        set_sell_plan,
+        remove_holding,
+        format_positions_table,
+    )
+    from core.data_fetcher import get_all_a_stocks_spot, get_etf_spot
+
+    sub = getattr(args, "sub", None)
+    if sub == "add":
+        code = getattr(args, "code", "").strip()
+        buy_date = getattr(args, "buy_date", "")
+        buy_price = float(getattr(args, "buy_price", 0))
+        quantity = float(getattr(args, "quantity", 0))
+        name = getattr(args, "name", "") or ""
+        category = (getattr(args, "category", "stock") or "stock").lower()
+        if category not in ("stock", "fund"):
+            category = "stock"
+        target = getattr(args, "target_price", None)
+        stop = getattr(args, "stop_loss", None)
+        plan_date = getattr(args, "plan_sell_date", None)
+        note = getattr(args, "note", None)
+        if not code or not buy_date or buy_price <= 0 or quantity <= 0:
+            print("用法: position add <code> <buy_date> <buy_price> <quantity> [--name] [--category stock|fund] [--target-price] [--stop-loss] [--plan-sell-date] [--note]")
+            return
+        add_holding(code=code, buy_date=buy_date, buy_price=buy_price, quantity=quantity, name=name, category=category, target_price=target, stop_loss=stop, plan_sell_date=plan_date, note=note)
+        print("✅ 已添加持仓")
+        return
+
+    if sub == "plan":
+        pid = getattr(args, "id", None)
+        target = getattr(args, "target_price", None)
+        stop = getattr(args, "stop_loss", None)
+        plan_date = getattr(args, "plan_sell_date", None)
+        note = getattr(args, "note", None)
+        if not pid:
+            print("用法: position plan --id <position_id> [--target-price] [--stop-loss] [--plan-sell-date] [--note]")
+            return
+        ok = set_sell_plan(int(pid), target_price=target, stop_loss=stop, plan_sell_date=plan_date, note=note)
+        print("✅ 已更新卖出计划" if ok else "未找到该持仓")
+        return
+
+    if sub == "rm" or sub == "delete":
+        pid = getattr(args, "id", None)
+        if not pid:
+            print("用法: position rm --id <position_id>")
+            return
+        ok = remove_holding(int(pid))
+        print("✅ 已删除" if ok else "未找到该持仓")
+        return
+
+    # list
+    positions = get_positions_with_plan()
+    price_map = {}
+    try:
+        spot = get_all_a_stocks_spot()
+        if not spot.empty and "代码" in spot.columns and "最新价" in spot.columns:
+            for _, row in spot.iterrows():
+                price_map[str(row["代码"])] = float(row["最新价"])
+        etf = get_etf_spot()
+        if not etf.empty and "代码" in etf.columns and "最新价" in etf.columns:
+            for _, row in etf.iterrows():
+                price_map[str(row["代码"])] = float(row["最新价"])
+    except Exception:
+        pass
+    lines = format_positions_table(positions, today_price_map=price_map)
+    print(f"\n{'='*70}")
+    print("  📋 我的持仓与卖出计划")
+    print(f"{'='*70}")
+    for line in lines:
+        print(line)
+    print(f"{'='*70}\n")
+
+
+def cmd_backtest(start_date: str = None, end_date: str = None, cash: float = 100000.0, max_symbols: int = 20):
+    """基于历史推荐记录，用 AKQuant 做「推荐日收盘买、次日收盘卖」回测。"""
+    from core.backtest_runner import run_recommendation_backtest
+    from datetime import timedelta
+
+    if not start_date or not end_date:
+        end = datetime.now()
+        start = end - timedelta(days=30)
+        start_date = start.strftime("%Y-%m-%d")
+        end_date = end.strftime("%Y-%m-%d")
+    logger.info(f"回测区间: {start_date} ~ {end_date}，初始资金 {cash}，最多 {max_symbols} 只标的")
+    result = run_recommendation_backtest(
+        start_date=start_date,
+        end_date=end_date,
+        initial_cash=cash,
+        category="stock",
+        max_symbols=max_symbols,
+    )
+    if result.get("error"):
+        print(f"\n⚠️ {result['error']}\n")
+        return
+    print(f"\n{'='*60}")
+    print("  📊 AKQuant 回测结果（推荐日收盘买 / 次日收盘卖）")
+    print(f"{'='*60}")
+    print(f"  区间: {result['start_date']} ~ {result['end_date']}")
+    print(f"  初始资金: {result['initial_cash']:.0f}")
+    print(f"  总交易次数: {result['trade_count']}")
+    print(f"  总盈亏: {result['total_pnl']:+.2f}")
+    print(f"  总收益率: {result['total_return_pct']:+.2f}%")
+    if result.get("symbol_results"):
+        print(f"\n  各标的:")
+        for r in result["symbol_results"][:15]:
+            print(f"    {r['code']}  交易{r.get('trade_count', 0)}次  盈亏{r.get('total_pnl', 0):+.2f}  收益{r.get('total_return_pct', 0):+.2f}%")
+    print(f"{'='*60}\n")
+
+
 def _print_preview(stocks: dict, funds: list):
     """在终端打印推荐预览。"""
     style_map = {"aggressive": "🔥激进", "stable": "🛡️稳健", "moderate": "⚖️适中"}
@@ -272,6 +387,26 @@ def main():
     context_parser = subparsers.add_parser("context", help="查看某日要闻与政策（供后续分析）")
     context_parser.add_argument("date", nargs="?", default=None, help="日期 YYYY-MM-DD，默认今日")
 
+    position_parser = subparsers.add_parser("position", help="个人持仓与卖出计划")
+    position_parser.add_argument("sub", nargs="?", default="list", choices=["add", "list", "plan", "rm", "delete"], help="add=list=plan=rm")
+    position_parser.add_argument("code", nargs="?", default="", help="标的代码（add 时必填）")
+    position_parser.add_argument("buy_date", nargs="?", default="", help="买入日期 YYYY-MM-DD（add 时必填）")
+    position_parser.add_argument("buy_price", nargs="?", default="0", help="买入价格（add 时必填）")
+    position_parser.add_argument("quantity", nargs="?", default="0", help="数量（add 时必填）")
+    position_parser.add_argument("--name", default="", help="名称（可选）")
+    position_parser.add_argument("--category", default="stock", choices=["stock", "fund"], help="stock|fund")
+    position_parser.add_argument("--target-price", type=float, default=None, help="目标卖出价")
+    position_parser.add_argument("--stop-loss", type=float, default=None, help="止损价")
+    position_parser.add_argument("--plan-sell-date", default=None, help="计划卖出日 YYYY-MM-DD")
+    position_parser.add_argument("--note", default=None, help="备注")
+    position_parser.add_argument("--id", type=int, default=None, help="持仓 id（plan/rm 时必填）")
+
+    backtest_parser = subparsers.add_parser("backtest", help="基于历史推荐做 AKQuant 回测")
+    backtest_parser.add_argument("--start", default=None, help="开始日期 YYYY-MM-DD")
+    backtest_parser.add_argument("--end", default=None, help="结束日期 YYYY-MM-DD")
+    backtest_parser.add_argument("--cash", type=float, default=100000.0, help="初始资金")
+    backtest_parser.add_argument("--max-symbols", type=int, default=20, help="最多回测标的数")
+
     args = parser.parse_args()
 
     if args.command == "predict":
@@ -284,6 +419,10 @@ def main():
         cmd_schedule()
     elif args.command == "context":
         cmd_context(args.date)
+    elif args.command == "position":
+        cmd_position(args)
+    elif args.command == "backtest":
+        cmd_backtest(start_date=args.start, end_date=args.end, cash=args.cash, max_symbols=args.max_symbols)
     else:
         parser.print_help()
 

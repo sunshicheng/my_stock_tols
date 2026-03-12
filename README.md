@@ -17,6 +17,8 @@ A 股股票 + 基金每日智能推荐系统，基于多因子量化筛选 + Dee
 - **每日自动复盘**：对比推荐与实际表现，计算命中率
 - **历史追踪**：SQLite 存储所有推荐和复盘记录
 - **定时调度**：支持自动化每日运行
+- **个人持仓**：记录买入价、数量、目标价、止损、计划卖出日，并与当日推荐对照
+- **回测**：基于历史推荐记录，用 [AKQuant](https://github.com/akfamily/akquant) 做「推荐日收盘买、次日收盘卖」的回测，复盘时可评估策略表现
 
 ## 快速开始
 
@@ -40,7 +42,15 @@ python main.py history
 # 6. 查看某日要闻与政策（供后续分析）
 python main.py context 2026-03-12
 
-# 7. 启动定时调度（后台运行）
+# 7. 个人持仓与卖出计划
+python main.py position list
+python main.py position add 600000 2026-03-01 10.5 100 --name 浦发银行 --target-price 12 --stop-loss 9.5 --plan-sell-date 2026-04-01
+python main.py position plan --id 1 --target-price 13 --plan-sell-date 2026-05-01
+
+# 8. 基于历史推荐做回测（需先 pip install akquant）
+python main.py backtest --start 2026-02-01 --end 2026-03-12 --cash 100000
+
+# 9. 启动定时调度（后台运行）
 python main.py schedule
 ```
 

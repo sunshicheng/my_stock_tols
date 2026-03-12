@@ -56,6 +56,21 @@ CREATE TABLE IF NOT EXISTS daily_context (
     created_at   TEXT DEFAULT (datetime('now','localtime')),
     UNIQUE(trade_date, context_type)
 );
+
+CREATE TABLE IF NOT EXISTS positions (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    code           TEXT NOT NULL,
+    name           TEXT,
+    category       TEXT NOT NULL,  -- stock / fund
+    buy_date       TEXT NOT NULL,
+    buy_price      REAL NOT NULL,
+    quantity       REAL NOT NULL,
+    target_price   REAL,           -- 目标卖出价
+    stop_loss      REAL,           -- 止损价
+    plan_sell_date TEXT,          -- 计划卖出日 YYYY-MM-DD
+    note           TEXT,
+    created_at     TEXT DEFAULT (datetime('now','localtime'))
+);
 """
 
 
@@ -184,6 +199,72 @@ def get_daily_context(trade_date: str) -> dict:
             except (json.JSONDecodeError, TypeError):
                 out[ctx_type] = []
     return out
+
+
+def add_position(
+    code: str,
+    name: str,
+    category: str,
+    buy_date: str,
+    buy_price: float,
+    quantity: float,
+    target_price: Optional[float] = None,
+    stop_loss: Optional[float] = None,
+    plan_sell_date: Optional[str] = None,
+    note: Optional[str] = None,
+) -> int:
+    """添加一条持仓记录，返回 id。"""
+    with _conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO positions (code, name, category, buy_date, buy_price, quantity, target_price, stop_loss, plan_sell_date, note)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (code, name or "", category, buy_date, buy_price, quantity, target_price, stop_loss, plan_sell_date or None, note or None),
+        )
+        return cur.lastrowid
+
+
+def list_positions(only_open: bool = True) -> list[dict]:
+    """列出持仓。only_open=True 时仅返回未设置 plan_sell_date 或未标记清仓的（当前表结构下即全部）。"""
+    with _conn() as conn:
+        rows = conn.execute("SELECT * FROM positions ORDER BY buy_date DESC, id DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_position(
+    position_id: int,
+    target_price: Optional[float] = None,
+    stop_loss: Optional[float] = None,
+    plan_sell_date: Optional[str] = None,
+    note: Optional[str] = None,
+) -> bool:
+    """更新持仓的卖出计划字段。"""
+    with _conn() as conn:
+        cur = conn.execute(
+            """UPDATE positions SET target_price=COALESCE(?, target_price), stop_loss=COALESCE(?, stop_loss),
+               plan_sell_date=COALESCE(?, plan_sell_date), note=COALESCE(?, note) WHERE id = ?""",
+            (target_price, stop_loss, plan_sell_date, note, position_id),
+        )
+        return cur.rowcount > 0
+
+
+def delete_position(position_id: int) -> bool:
+    """删除一条持仓（如已清仓可删或保留做历史）。"""
+    with _conn() as conn:
+        cur = conn.execute("DELETE FROM positions WHERE id = ?", (position_id,))
+        return cur.rowcount > 0
+
+
+def get_recommendations_by_date_range(start_date: str, end_date: str, category: Optional[str] = None) -> list[dict]:
+    """按日期范围获取推荐记录，供回测使用。"""
+    sql = "SELECT * FROM recommendations WHERE trade_date >= ? AND trade_date <= ?"
+    params: list = [start_date, end_date]
+    if category:
+        sql += " AND category = ?"
+        params.append(category)
+    sql += " ORDER BY trade_date, score DESC"
+    with _conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
 
 
 init_db()

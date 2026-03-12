@@ -1,5 +1,6 @@
 """报告生成模块 — 将推荐和复盘结果格式化为 Markdown 文件。"""
 
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -7,6 +8,26 @@ from loguru import logger
 
 from config.settings import OUTPUT_DIR
 from core.zhouyi import get_daily_hexagram
+
+
+def _parse_buy_sell_from_analysis(text: str) -> tuple[str, str]:
+    """从 AI 分析文本中解析「建议买入」「建议卖出」，返回 (买入建议, 卖出建议)。"""
+    if not text:
+        return "-", "-"
+    buy = "-"
+    sell = "-"
+    for pattern, key in [
+        (r"建议买入\s*[：:]\s*([^|】\n]+)", "buy"),
+        (r"建议卖出\s*[：:]\s*([^|】\n]+)", "sell"),
+    ]:
+        m = re.search(pattern, text)
+        if m:
+            val = m.group(1).strip()[:80]
+            if key == "buy":
+                buy = val
+            else:
+                sell = val
+    return buy, sell
 
 
 def _ensure_dir(date_str: str) -> Path:
@@ -52,6 +73,40 @@ def generate_prediction_report(
         logger.info(f"今日卦象已写入报告: {h['full_name']}（{h['name']}卦），农历 {h.get('lunar', '')}")
     except Exception as e:
         logger.warning(f"卦象获取或写入失败，已跳过: {e}")
+
+    # 今日操作建议（买什么、何时卖）- 汇总推荐标的的买卖建议
+    lines.append("\n## 🎯 今日操作建议（买什么、何时卖）\n")
+    lines.append("*以下为今日推荐标的的买卖建议汇总，具体以各条 AI 分析为准。开盘前/盘中可参考执行。*\n")
+    buy_sell_rows = []
+    for style in ["aggressive", "stable", "moderate"]:
+        for s in stocks.get(style, []):
+            buy_str, sell_str = _parse_buy_sell_from_analysis(s.get("ai_analysis") or "")
+            buy_sell_rows.append({
+                "name": f"{s['name']}({s['code']})",
+                "price": s.get("price", 0),
+                "type": "股票",
+                "buy": buy_str,
+                "sell": sell_str,
+            })
+    for f in funds:
+        buy_str, sell_str = _parse_buy_sell_from_analysis(f.get("ai_analysis") or "")
+        buy_sell_rows.append({
+            "name": f"{f['name']}({f['code']})",
+            "price": f.get("price", 0),
+            "type": "基金",
+            "buy": buy_str,
+            "sell": sell_str,
+        })
+    if buy_sell_rows:
+        lines.append("| 标的 | 类型 | 现价 | 建议买入 | 建议卖出 |")
+        lines.append("|------|------|------|----------|----------|")
+        for r in buy_sell_rows[:25]:
+            p = r.get("price")
+            price_str = f"{p:.2f}" if isinstance(p, (int, float)) else str(p) if p is not None else "-"
+            lines.append(f"| {r['name']} | {r['type']} | {price_str} | {r['buy']} | {r['sell']} |")
+    else:
+        lines.append("（完成 AI 分析后将自动生成买卖建议表）\n")
+    lines.append("")
 
     # 市场概况
     if market_info:

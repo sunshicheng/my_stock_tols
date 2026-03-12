@@ -1,17 +1,20 @@
 """复盘模块 — 拉取当日实际行情，与早盘推荐对比，生成复盘数据。"""
 
+import time
 from datetime import datetime
 
 import pandas as pd
 from loguru import logger
 
-from core.data_fetcher import get_all_a_stocks_spot, get_etf_spot
+from core.data_fetcher import get_all_a_stocks_spot, get_etf_spot, get_fund_net_value
 from core.ai_analyzer import analyze_review
 from storage.db import get_recommendations, save_reviews, save_daily_summary
 
 
-def _get_actual_prices() -> dict[str, dict]:
-    """获取当日收盘数据，返回 {代码: {price, change_pct}} 映射。"""
+def _get_actual_prices(recommendations: list[dict]) -> dict[str, dict]:
+    """获取当日收盘数据，返回 {代码: {close_price, change_pct}}。
+    股票与 ETF 从行情接口获取；开放式基金（股票型/混合型）若不在行情中则拉取最新净值与日增长率。
+    """
     result = {}
 
     stock_spot = get_all_a_stocks_spot()
@@ -29,6 +32,33 @@ def _get_actual_prices() -> dict[str, dict]:
                 "close_price": row["最新价"],
                 "change_pct": row.get("涨跌幅", 0),
             }
+
+    # 开放式基金（股票型/混合型）不在行情接口中，按需拉取最新净值与日增长率
+    fund_codes = [r["code"] for r in recommendations if r.get("category") == "fund" and r["code"] not in result]
+    for code in fund_codes:
+        try:
+            df = get_fund_net_value(code)
+            if df is None or df.empty:
+                continue
+            date_col = next((c for c in ["净值日期", "日期", "date"] if c in df.columns), df.columns[0])
+            df = df.sort_values(date_col)
+            last = df.iloc[-1]
+            price_col = next((c for c in ["单位净值", "净值"] if c in df.columns), None)
+            price = last.get(price_col, 0) if price_col else 0
+            change = last.get("日增长率", None)
+            if (change is None or pd.isna(change)) and price_col and len(df) >= 2:
+                try:
+                    prev = df.iloc[-2].get(price_col)
+                    if prev is not None and float(prev) != 0:
+                        change = (float(price) - float(prev)) / float(prev) * 100
+                except (TypeError, ValueError, KeyError):
+                    pass
+            if change is None or pd.isna(change):
+                change = 0.0
+            result[code] = {"close_price": float(price) if price is not None else 0, "change_pct": float(change)}
+            time.sleep(0.5)
+        except Exception as e:
+            logger.debug(f"复盘拉取基金净值 {code}: {e}")
 
     return result
 
@@ -49,7 +79,7 @@ def run_review(trade_date: str = None) -> dict:
         logger.warning(f"没有找到 {trade_date} 的推荐记录，无法复盘")
         return {"error": f"没有找到 {trade_date} 的推荐记录"}
 
-    actual_prices = _get_actual_prices()
+    actual_prices = _get_actual_prices(recommendations)
 
     results = []
     stock_hit = 0

@@ -71,6 +71,13 @@ CREATE TABLE IF NOT EXISTS positions (
     note           TEXT,
     created_at     TEXT DEFAULT (datetime('now','localtime'))
 );
+
+CREATE TABLE IF NOT EXISTS daily_reports (
+    trade_date        TEXT PRIMARY KEY,
+    prediction_report TEXT,   -- 推荐报告 Markdown 全文
+    review_report     TEXT,   -- 复盘报告 Markdown 全文
+    created_at        TEXT DEFAULT (datetime('now','localtime'))
+);
 """
 
 
@@ -87,14 +94,50 @@ def init_db():
 
 
 def save_recommendations(trade_date: str, items: list[dict]):
-    """批量保存推荐记录。每条 dict 需包含 category/style/code/name/score/reason/ai_analysis。"""
+    """批量保存推荐记录。当日同 code+category 已存在则更新，否则插入，避免重复。"""
     with _conn() as conn:
-        conn.executemany(
-            """INSERT INTO recommendations
-               (trade_date, category, style, code, name, score, reason, ai_analysis)
-               VALUES (:trade_date, :category, :style, :code, :name, :score, :reason, :ai_analysis)""",
-            [{**item, "trade_date": trade_date} for item in items],
-        )
+        for item in items:
+            row = {
+                "trade_date": trade_date,
+                "category": item.get("category", "stock"),
+                "style": item.get("style"),
+                "code": item.get("code", ""),
+                "name": item.get("name"),
+                "score": item.get("score"),
+                "reason": item.get("reason"),
+                "ai_analysis": item.get("ai_analysis"),
+            }
+            cur = conn.execute(
+                """UPDATE recommendations
+                   SET style = ?, name = ?, score = ?, reason = ?, ai_analysis = ?
+                   WHERE trade_date = ? AND code = ? AND category = ?""",
+                (
+                    row["style"],
+                    row["name"],
+                    row["score"],
+                    row["reason"],
+                    row["ai_analysis"],
+                    row["trade_date"],
+                    row["code"],
+                    row["category"],
+                ),
+            )
+            if cur.rowcount == 0:
+                conn.execute(
+                    """INSERT INTO recommendations
+                       (trade_date, category, style, code, name, score, reason, ai_analysis)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        row["trade_date"],
+                        row["category"],
+                        row["style"],
+                        row["code"],
+                        row["name"],
+                        row["score"],
+                        row["reason"],
+                        row["ai_analysis"],
+                    ),
+                )
 
 
 def get_recommendations(trade_date: str, category: Optional[str] = None) -> list[dict]:
@@ -104,6 +147,19 @@ def get_recommendations(trade_date: str, category: Optional[str] = None) -> list
         sql += " AND category = ?"
         params.append(category)
     sql += " ORDER BY score DESC"
+    with _conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_reviews(trade_date: str, category: Optional[str] = None) -> list[dict]:
+    """按交易日获取复盘记录。"""
+    sql = "SELECT * FROM reviews WHERE trade_date = ?"
+    params: list = [trade_date]
+    if category:
+        sql += " AND category = ?"
+        params.append(category)
+    sql += " ORDER BY code"
     with _conn() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
@@ -154,6 +210,16 @@ def get_recent_accuracy(days: int = 30) -> list[dict]:
         rows = conn.execute(
             "SELECT * FROM daily_summary ORDER BY trade_date DESC LIMIT ?",
             (days,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_daily_summaries_range(start_date: str, end_date: str) -> list[dict]:
+    """按日期范围获取每日摘要，用于历史预测列表。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM daily_summary WHERE trade_date >= ? AND trade_date <= ? ORDER BY trade_date DESC",
+            (start_date, end_date),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -265,6 +331,38 @@ def get_recommendations_by_date_range(start_date: str, end_date: str, category: 
     with _conn() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
+
+
+def save_prediction_report(trade_date: str, content: str) -> None:
+    """保存当日预测报告 Markdown 全文。"""
+    with _conn() as conn:
+        conn.execute(
+            """INSERT INTO daily_reports (trade_date, prediction_report) VALUES (?, ?)
+               ON CONFLICT(trade_date) DO UPDATE SET prediction_report = excluded.prediction_report""",
+            (trade_date, content),
+        )
+
+
+def save_review_report(trade_date: str, content: str) -> None:
+    """保存当日复盘报告 Markdown 全文。"""
+    with _conn() as conn:
+        conn.execute(
+            """INSERT INTO daily_reports (trade_date, review_report) VALUES (?, ?)
+               ON CONFLICT(trade_date) DO UPDATE SET review_report = excluded.review_report""",
+            (trade_date, content),
+        )
+
+
+def get_daily_report(trade_date: str) -> dict:
+    """获取某日的预测/复盘报告正文。返回 { prediction_report: str|None, review_report: str|None }。"""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT prediction_report, review_report FROM daily_reports WHERE trade_date = ?",
+            (trade_date,),
+        ).fetchone()
+    if not row:
+        return {"prediction_report": None, "review_report": None}
+    return {"prediction_report": row[0], "review_report": row[1]}
 
 
 init_db()

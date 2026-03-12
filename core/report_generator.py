@@ -8,6 +8,7 @@ from loguru import logger
 
 from config.settings import OUTPUT_DIR
 from core.zhouyi import get_daily_hexagram
+from storage import db as storage_db
 
 
 def _parse_buy_sell_from_analysis(text: str) -> tuple[str, str]:
@@ -253,6 +254,10 @@ def generate_prediction_report(
 
     content = "\n".join(lines)
     filepath.write_text(content, encoding="utf-8")
+    try:
+        storage_db.save_prediction_report(trade_date, content)
+    except Exception as e:
+        logger.warning(f"预测报告写入数据库失败: {e}")
     logger.info(f"推荐报告已生成: {filepath}")
     return str(filepath)
 
@@ -325,5 +330,9 @@ def generate_review_report(review_data: dict) -> str:
 
     content = "\n".join(lines)
     filepath.write_text(content, encoding="utf-8")
+    try:
+        storage_db.save_review_report(trade_date, content)
+    except Exception as e:
+        logger.warning(f"复盘报告写入数据库失败: {e}")
     logger.info(f"复盘报告已生成: {filepath}")
     return str(filepath)

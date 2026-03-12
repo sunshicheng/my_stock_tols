@@ -19,6 +19,7 @@ A 股股票 + 基金每日智能推荐系统，基于多因子量化筛选 + Dee
 - **定时调度**：支持自动化每日运行
 - **个人持仓**：记录买入价、数量、目标价、止损、计划卖出日，并与当日推荐对照
 - **回测**：基于历史推荐记录，用 [AKQuant](https://github.com/akfamily/akquant) 做「推荐日收盘买、次日收盘卖」的回测，复盘时可评估策略表现
+- **Web 版**：FastAPI + Vue3，登录（手机号+密码）、首页每日预测、我的持仓、历史预测与复盘详情、回测、配置（AI Key / 修改密码）
 
 ## 快速开始
 
@@ -54,6 +55,26 @@ python main.py backtest --start 2026-02-01 --end 2026-03-12 --cash 100000
 python main.py schedule
 ```
 
+### Web 版（可选）
+
+```bash
+# 后端（在项目根目录）
+pip install -r requirements.txt   # 含 fastapi / sqlmodel 等
+# 可选：.env 中设置 WEB_SECRET_KEY（JWT 密钥，生产环境必改）
+python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+
+# 前端（另开终端）
+cd frontend
+npm install
+npm run dev
+# 浏览器打开 http://localhost:5173，先注册（手机号+密码）再登录
+```
+
+- **首页**：今日预测（依赖 CLI 已生成的当日推荐）
+- **我的持仓**：增删改持仓与卖出计划
+- **历史预测**：按日期筛选，进入某日可看预测+复盘详情，并可运行回测
+- **配置**：修改 DeepSeek API Key（写入 .env）、修改登录密码
+
 ## 项目结构
 
 ```
@@ -74,8 +95,16 @@ python main.py schedule
 │   └── indicators.py       # 技术指标（MA/MACD/RSI/KDJ/BOLL 等）
 ├── storage/
 │   └── db.py               # SQLite 存储（推荐、复盘、每日汇总、**每日要闻与政策**）
-├── output/                 # 生成的报告
-└── data/                   # SQLite 数据库
+├── backend/                 # Web 后端（FastAPI + SQLModel）
+│   ├── main.py
+│   ├── database.py
+│   ├── models.py            # User
+│   ├── auth.py
+│   ├── deps.py
+│   └── routers/             # auth, positions, predictions, backtest, config
+├── frontend/                # Web 前端（Vite + Vue 3）
+├── output/                  # 生成的报告
+└── data/                    # SQLite 数据库
 ```
 
 ## 筛选策略

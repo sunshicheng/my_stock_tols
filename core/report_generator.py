@@ -46,10 +46,7 @@ def generate_prediction_report(
     policy_news_list: list = None,
     affected_sectors: list = None,
 ) -> str:
-    """生成每日推荐报告（Markdown），返回文件路径。可传入要闻、政策与驱动板块。"""
-    day_dir = _ensure_dir(trade_date)
-    filepath = day_dir / f"推荐_{trade_date}.md"
-
+    """生成每日推荐报告内容并写入数据库（不再落盘为 Markdown 文件）。返回空字符串以兼容调用方。"""
     lines = [
         f"# 📊 每日推荐 — {trade_date}",
         f"\n> 生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -253,20 +250,17 @@ def generate_prediction_report(
     lines.append("- 短线操作需设置止损位，建议单只个股仓位不超过总资金的10%")
 
     content = "\n".join(lines)
-    filepath.write_text(content, encoding="utf-8")
     try:
         storage_db.save_prediction_report(trade_date, content)
     except Exception as e:
         logger.warning(f"预测报告写入数据库失败: {e}")
-    logger.info(f"推荐报告已生成: {filepath}")
-    return str(filepath)
+    logger.info("推荐报告已写入数据库")
+    return ""
 
 
 def generate_review_report(review_data: dict) -> str:
-    """生成复盘报告（Markdown），返回文件路径。"""
+    """生成复盘报告内容并写入数据库（不再落盘为 Markdown 文件）。返回空字符串以兼容调用方。"""
     trade_date = review_data.get("trade_date", datetime.now().strftime("%Y-%m-%d"))
-    day_dir = _ensure_dir(trade_date)
-    filepath = day_dir / f"复盘_{trade_date}.md"
 
     summary = review_data.get("summary", {})
     results = review_data.get("results", [])
@@ -329,10 +323,9 @@ def generate_review_report(review_data: dict) -> str:
     lines.append("*本报告由量化筛选模型 + DeepSeek AI 自动生成*")
 
     content = "\n".join(lines)
-    filepath.write_text(content, encoding="utf-8")
     try:
         storage_db.save_review_report(trade_date, content)
     except Exception as e:
         logger.warning(f"复盘报告写入数据库失败: {e}")
-    logger.info(f"复盘报告已生成: {filepath}")
-    return str(filepath)
+    logger.info("复盘报告已写入数据库")
+    return ""

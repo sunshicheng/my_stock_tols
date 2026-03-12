@@ -48,8 +48,8 @@ def cmd_review(trade_date: str = None):
         logger.error(review_data["error"])
         return
 
-    report_path = generate_review_report(review_data)
-    logger.info(f"✅ 复盘完成！报告路径: {report_path}")
+    generate_review_report(review_data)
+    logger.info("✅ 复盘完成！报告已写入数据库")
 
     # 控制台预览
     summary = review_data.get("summary", {})

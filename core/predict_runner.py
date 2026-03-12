@@ -80,14 +80,14 @@ def run_predict(return_data: bool = False) -> dict:
         save_daily_summary_after_predict(trade_date, stock_total, fund_total)
 
         logger.info("正在生成报告（含今日卦象、市场概况、要闻与驱动板块）...")
-        report_path = generate_prediction_report(
+        generate_prediction_report(
             trade_date, stocks, funds, market_info,
             market_news_list=market_news_list,
             policy_news_list=policy_news_list,
             affected_sectors=affected_sectors,
         )
-        logger.info(f"✅ 预测完成！报告路径: {report_path}")
-        out = {"ok": True, "trade_date": trade_date, "report_path": report_path}
+        logger.info("✅ 预测完成！报告已写入数据库")
+        out = {"ok": True, "trade_date": trade_date, "report_path": ""}
         if return_data:
             out["stocks"] = stocks
             out["funds"] = funds

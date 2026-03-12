@@ -35,6 +35,7 @@ def _retry(fn, *args, retries: int = 2, delay: float = 1.0, **kwargs):
             return pd.DataFrame()
         except Exception as e:
             err_msg = str(e).lower()
+            # 数据源返回内容中有时含 \u 等字符，AKShare 解析时当正则用会触发 invalid escape sequence，属上游问题
             if "escape sequence" in err_msg or "regex" in err_msg or "regular expression" in err_msg:
                 logger.debug(f"新闻接口解析错误，跳过重试: {e}")
                 return pd.DataFrame()

@@ -20,38 +20,70 @@
         </div>
         <!-- 无报告时仅表格；有报告时也保留表格便于快速查看 -->
         <div v-if="!recommendations.length" class="empty">暂无今日推荐，点击上方「开始预测」执行当日预测任务。</div>
-        <div v-else class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>类型</th>
-                <th>代码</th>
-                <th>名称</th>
-                <th>风格</th>
-                <th>评分</th>
-                <th>理由</th>
-                <th>AI 分析</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="r in recommendations" :key="r.code + (r.style || '')">
-                <td>{{ r.category === 'fund' ? '基金' : '股票' }}</td>
-                <td>{{ r.code }}</td>
-                <td>{{ r.name }}</td>
-                <td>{{ styleMap[r.style] || r.style }}</td>
-                <td>{{ r.score }}</td>
-                <td>{{ r.reason || '-' }}</td>
-                <td class="analysis">{{ r.ai_analysis || '-' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <template v-else>
+          <div v-if="stockRecommendations.length" class="table-wrap">
+            <h3 class="table-caption">股票推荐</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>代码</th>
+                  <th>名称</th>
+                  <th>风格</th>
+                  <th>评分</th>
+                  <th>理由</th>
+                  <th>AI 分析</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in stockRecommendations" :key="r.code + (r.style || '')">
+                  <td>{{ r.code }}</td>
+                  <td>{{ r.name }}</td>
+                  <td>{{ styleMap[r.style] || r.style }}</td>
+                  <td>{{ r.score }}</td>
+                  <td>{{ r.reason || '-' }}</td>
+                  <td class="analysis">{{ r.ai_analysis || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="fundRecommendations.length" class="table-wrap">
+            <h3 class="table-caption">基金推荐</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>代码</th>
+                  <th>名称</th>
+                  <th>风格</th>
+                  <th>评分</th>
+                  <th>理由</th>
+                  <th>AI 分析</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in fundRecommendations" :key="r.code + (r.style || '')">
+                  <td>{{ r.code }}</td>
+                  <td>{{ r.name }}</td>
+                  <td>{{ styleMap[r.style] || r.style }}</td>
+                  <td>{{ r.score }}</td>
+                  <td>{{ r.reason || '-' }}</td>
+                  <td class="analysis">{{ r.ai_analysis || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
       </template>
     </section>
 
     <!-- 二、复盘 -->
     <section class="block">
       <h2 class="block-title">复盘</h2>
+      <div class="toolbar">
+        <button type="button" class="btn primary" :disabled="reviewing" @click="startReview">
+          {{ reviewing ? '复盘中…' : '开始复盘' }}
+        </button>
+        <span v-if="reviewError" class="error-msg">{{ reviewError }}</span>
+      </div>
       <div v-if="summary" class="stats-row">
         <div class="stat-card">
           <span class="stat-label">股票命中</span>
@@ -79,7 +111,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { parse } from 'marked'
 import { predictionsApi } from '../api'
 
@@ -90,7 +122,18 @@ const reportContent = ref(null)
 const loading = ref(true)
 const predicting = ref(false)
 const predictError = ref('')
+const reviewing = ref(false)
+const reviewError = ref('')
+let predictPollTimer = null
+let reviewPollTimer = null
 const styleMap = { aggressive: '激进', stable: '稳健', moderate: '适中' }
+
+const stockRecommendations = computed(() =>
+  (recommendations.value || []).filter((r) => r.category === 'stock')
+)
+const fundRecommendations = computed(() =>
+  (recommendations.value || []).filter((r) => r.category === 'fund')
+)
 
 const mdOptions = { gfm: true, breaks: true }
 
@@ -109,6 +152,7 @@ const formattedReport = computed(() => {
 async function loadToday() {
   loading.value = true
   predictError.value = ''
+  reviewError.value = ''
   try {
     const { data } = await predictionsApi.getToday()
     tradeDate.value = data.trade_date
@@ -127,15 +171,69 @@ async function startPredict() {
   predictError.value = ''
   try {
     await predictionsApi.runPredict()
-    await loadToday()
+    // 轮询任务状态，避免长连接超时
+    const poll = async () => {
+      if (!predicting.value) return
+      const { data } = await predictionsApi.getPredictStatus()
+      if (data.status === 'success') {
+        if (predictPollTimer) clearInterval(predictPollTimer)
+        predictPollTimer = null
+        await loadToday()
+        predicting.value = false
+        return
+      }
+      if (data.status === 'error') {
+        if (predictPollTimer) clearInterval(predictPollTimer)
+        predictPollTimer = null
+        predictError.value = data.error || '预测任务失败'
+        predicting.value = false
+        return
+      }
+    }
+    await poll()
+    if (predicting.value) predictPollTimer = setInterval(poll, 2000)
   } catch (e) {
-    predictError.value = e.response?.data?.detail || e.message || '预测任务失败'
-  } finally {
+    predictError.value = e.response?.data?.detail || e.message || '预测任务提交失败'
     predicting.value = false
   }
 }
 
+async function startReview() {
+  reviewing.value = true
+  reviewError.value = ''
+  try {
+    await predictionsApi.runReview()
+    const poll = async () => {
+      if (!reviewing.value) return
+      const { data } = await predictionsApi.getReviewStatus()
+      if (data.status === 'success') {
+        if (reviewPollTimer) clearInterval(reviewPollTimer)
+        reviewPollTimer = null
+        await loadToday()
+        reviewing.value = false
+        return
+      }
+      if (data.status === 'error') {
+        if (reviewPollTimer) clearInterval(reviewPollTimer)
+        reviewPollTimer = null
+        reviewError.value = data.error || '复盘任务失败'
+        reviewing.value = false
+        return
+      }
+    }
+    await poll()
+    if (reviewing.value) reviewPollTimer = setInterval(poll, 2000)
+  } catch (e) {
+    reviewError.value = e.response?.data?.detail || e.message || '复盘任务提交失败'
+    reviewing.value = false
+  }
+}
+
 onMounted(loadToday)
+onUnmounted(() => {
+  if (predictPollTimer) clearInterval(predictPollTimer)
+  if (reviewPollTimer) clearInterval(reviewPollTimer)
+})
 </script>
 
 <style scoped>
@@ -213,7 +311,9 @@ onMounted(loadToday)
   .pending { font-size: 14px; color: #888; margin: 0 0 1rem; }
 
   .loading, .empty { padding: 2rem; text-align: center; color: #666; }
-  .table-wrap { overflow: auto; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .table-caption { margin: 0 0 0.5rem; font-size: 0.95rem; font-weight: 600; color: #333; }
+  .table-wrap { overflow: auto; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1rem; }
+  .table-wrap:last-of-type { margin-bottom: 0; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
   th { background: #fafafa; font-weight: 600; }

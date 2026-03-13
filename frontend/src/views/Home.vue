@@ -9,6 +9,7 @@
         <span class="date">日期：{{ tradeDate }}</span>
       </div>
       <div v-if="loading" class="loading">加载中…</div>
+      <p v-else-if="loadError" class="error-msg load-error">{{ loadError }}</p>
       <template v-else>
         <div class="toolbar">
           <button type="button" class="btn primary" :disabled="predicting" @click="startPredict">
@@ -122,6 +123,7 @@ const summary = ref(null)
 const recommendations = ref([])
 const reportContent = ref(null)
 const loading = ref(true)
+const loadError = ref('')
 const predicting = ref(false)
 const predictError = ref('')
 const reviewing = ref(false)
@@ -153,6 +155,7 @@ const formattedReport = computed(() => {
 
 async function loadToday() {
   loading.value = true
+  loadError.value = ''
   predictError.value = ''
   reviewError.value = ''
   try {
@@ -161,8 +164,9 @@ async function loadToday() {
     summary.value = data.summary || null
     recommendations.value = data.recommendations || []
     reportContent.value = data.report_content || null
-  } catch (_) {
+  } catch (e) {
     recommendations.value = []
+    loadError.value = e?.message || '加载失败，请检查网络后重试'
   } finally {
     loading.value = false
   }
@@ -176,20 +180,27 @@ async function startPredict() {
     // 轮询任务状态，避免长连接超时
     const poll = async () => {
       if (!predicting.value) return
-      const { data } = await predictionsApi.getPredictStatus()
-      if (data.status === 'success') {
+      try {
+        const { data } = await predictionsApi.getPredictStatus()
+        if (data.status === 'success') {
+          if (predictPollTimer) clearInterval(predictPollTimer)
+          predictPollTimer = null
+          await loadToday()
+          predicting.value = false
+          return
+        }
+        if (data.status === 'error') {
+          if (predictPollTimer) clearInterval(predictPollTimer)
+          predictPollTimer = null
+          predictError.value = data.error || '预测任务失败'
+          predicting.value = false
+          return
+        }
+      } catch (e) {
         if (predictPollTimer) clearInterval(predictPollTimer)
         predictPollTimer = null
-        await loadToday()
+        predictError.value = e.response?.data?.detail || e.message || '获取预测状态失败，请检查网络或稍后刷新页面查看（任务可能已在执行，请勿重复点击）'
         predicting.value = false
-        return
-      }
-      if (data.status === 'error') {
-        if (predictPollTimer) clearInterval(predictPollTimer)
-        predictPollTimer = null
-        predictError.value = data.error || '预测任务失败'
-        predicting.value = false
-        return
       }
     }
     await poll()
@@ -207,20 +218,27 @@ async function startReview() {
     await predictionsApi.runReview()
     const poll = async () => {
       if (!reviewing.value) return
-      const { data } = await predictionsApi.getReviewStatus()
-      if (data.status === 'success') {
+      try {
+        const { data } = await predictionsApi.getReviewStatus()
+        if (data.status === 'success') {
+          if (reviewPollTimer) clearInterval(reviewPollTimer)
+          reviewPollTimer = null
+          await loadToday()
+          reviewing.value = false
+          return
+        }
+        if (data.status === 'error') {
+          if (reviewPollTimer) clearInterval(reviewPollTimer)
+          reviewPollTimer = null
+          reviewError.value = data.error || '复盘任务失败'
+          reviewing.value = false
+          return
+        }
+      } catch (e) {
         if (reviewPollTimer) clearInterval(reviewPollTimer)
         reviewPollTimer = null
-        await loadToday()
+        reviewError.value = e.response?.data?.detail || e.message || '获取复盘状态失败，请检查网络或稍后刷新页面查看（任务可能已在执行，请勿重复点击）'
         reviewing.value = false
-        return
-      }
-      if (data.status === 'error') {
-        if (reviewPollTimer) clearInterval(reviewPollTimer)
-        reviewPollTimer = null
-        reviewError.value = data.error || '复盘任务失败'
-        reviewing.value = false
-        return
       }
     }
     await poll()
@@ -251,6 +269,7 @@ onUnmounted(() => {
   .btn.primary { background: #1989fa; color: #fff; }
   .btn:disabled { opacity: 0.7; cursor: not-allowed; }
   .error-msg { color: #ee0a24; font-size: 13px; }
+  .load-error { margin: 1rem 0; }
 
   .report-section {
     background: #fff;

@@ -167,10 +167,10 @@ pm2 delete stock-api  # 从 PM2 中移除
 用 WebView 包一层 Vue 打包结果，可调部分原生能力（相机、文件、推送等）。**以下命令均在 `frontend` 目录执行。**
 
 流程概览：
-1. 打包前端：`npm run build`
+1. **打包前端（必填服务器地址）**：`VITE_API_BASE=https://你的域名 npm run build`（不写的话 App 里请求会发到 localhost，一直无效）
 2. 安装并初始化（若尚未做）：`npm i @capacitor/core @capacitor/cli @capacitor/android`，`npx cap init "股票推荐" "com.mystock.tools" --web-dir=dist`
 3. 添加 Android 平台：`npx cap add android`
-4. 每次改前端后同步：`npm run build` 再 `npx cap sync`（或 `npm run cap:sync`）
+4. 每次改前端后同步：先按步骤 1 打包，再 `npx cap sync`（或 `npm run cap:sync`）
 5. 用 Android Studio 打开 `frontend/android` 目录，编译、签名、生成 APK/AAB
 
 优点：和 Vue/Vite 集成简单，官方文档全，生态成熟。

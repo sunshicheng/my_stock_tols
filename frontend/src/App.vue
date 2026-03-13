@@ -1,8 +1,15 @@
 <template>
+  <div v-if="isAppWithoutServer" class="network-tip app-no-server">
+    当前 App 未配置服务器地址，请用 <code>VITE_API_BASE=你的服务器</code> 重新打包后再安装。
+  </div>
+  <div v-else-if="networkErrorMsg" class="network-tip">
+    {{ networkErrorMsg }}
+  </div>
   <router-view />
 </template>
 
 <script setup>
+import { networkErrorMsg, isAppWithoutServer } from './api'
 </script>
 
 <style>
@@ -26,4 +33,20 @@
   input, select, textarea {
     font-size: 16px; /* 避免 iOS 聚焦时缩放 */
   }
+  .network-tip {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    padding: 10px 12px;
+    background: #ee0a24;
+    color: #fff;
+    font-size: 14px;
+    text-align: center;
+  }
+  .network-tip.app-no-server {
+    background: #ed6a0c;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .network-tip code { font-size: 12px; opacity: 0.95; }
 </style>

@@ -6,7 +6,8 @@ apscheduler>=3.10.0
 python-dotenv>=1.0.0
 tabulate>=0.9.0
 loguru>=0.7.0
-akquant>=0.1.0
+# 限定 >=0.1.15 避免 pip 回溯到 0.1.14（仅源码包，会卡在编译）
+akquant>=0.1.15
 # Web 后端
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0

@@ -24,6 +24,15 @@ A 股股票 + 基金每日智能推荐系统，基于多因子量化筛选 + Dee
 ## 快速开始
 
 ```bash
+# 0. 虚拟环境（Linux/Debian 等若遇「externally-managed-environment」必做；其他系统推荐）
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+# 若用 conda 且 pip install 卡在编译：先 conda 装大件，再 pip 装其余（见下方「Conda 安装卡住」）
+# conda create -n stock python=3.11 -y && conda activate stock
+# conda install numpy pandas -y
+# pip install -r requirements.txt
+
 # 1. 安装依赖
 pip install -r requirements.txt
 
@@ -58,7 +67,7 @@ python main.py schedule
 ### Web 版（可选）
 
 ```bash
-# 后端（在项目根目录）
+# 后端（在项目根目录；若用 venv 请先 source .venv/bin/activate）
 pip install -r requirements.txt   # 含 fastapi / sqlmodel 等
 python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
@@ -73,6 +82,21 @@ npm run dev
 - **持仓**：增删改持仓与卖出计划
 - **历史**：按日期筛选，进入某日可看预测+复盘详情，并可运行回测
 - **设置**：仅配置 AI（API Key / Base URL / 模型），支持 DeepSeek、OpenAI、Claude；使用 LiteLLM 时选「自定义」并填代理地址
+
+### Conda 下安装卡住（如编译 akquant 一直不动）
+
+用 conda 时若 `pip install -r requirements.txt` 卡在编译（尤其是 akquant 或 cryptography 等），可尝试：
+
+1. **先让 conda 装大件**，减少 pip 需要编译的包：
+   ```bash
+   conda activate 你的环境
+   conda install numpy pandas -y
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
+2. **分步装，看卡在哪个包**：先 `pip install pandas numpy akshare loguru python-dotenv tabulate openai apscheduler`，再单独 `pip install akquant`。若卡在 `akquant`，多半是当前平台没有预编译 wheel，在从源码编译 Rust 部分。
+3. **先不装 akquant 也能跑**：回测功能依赖 akquant，其余（预测、复盘、Web、持仓等）不依赖。可先注释掉 `requirements.txt` 里 `akquant>=0.1.0` 一行，装完其它依赖后跑通项目，再单独处理 akquant（或暂时不用回测）。
+4. **换用 venv + 系统 Python**：在 Linux 上若 conda 编译仍卡，可用 `python3 -m venv .venv && source .venv/bin/activate` 再 `pip install -r requirements.txt`，系统自带 Python 有时对应的预编译 wheel 更多。
 
 ### 服务器上用 PM2 管理后端
 

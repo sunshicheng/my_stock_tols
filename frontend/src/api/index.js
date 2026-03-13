@@ -5,36 +5,7 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
-
-api.interceptors.response.use(
-  (r) => r,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-        window.location.href = '/login'
-      }
-    }
-    return Promise.reject(err)
-  }
-)
-
 export default api
-
-export const authApi = {
-  register(phone, password) {
-    return api.post('/api/auth/register', { phone, password })
-  },
-  login(phone, password) {
-    return api.post('/api/auth/login', { phone, password })
-  },
-}
 
 export const predictionsApi = {
   getToday() {
@@ -88,10 +59,7 @@ export const configApi = {
   get() {
     return api.get('/api/config')
   },
-  updateApiKey(apiKey) {
-    return api.put('/api/config/api-key', { api_key: apiKey })
-  },
-  changePassword(oldPassword, newPassword) {
-    return api.post('/api/config/change-password', { old_password: oldPassword, new_password: newPassword })
+  update(body) {
+    return api.put('/api/config', body)
   },
 }

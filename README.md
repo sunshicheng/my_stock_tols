@@ -19,7 +19,7 @@ A 股股票 + 基金每日智能推荐系统，基于多因子量化筛选 + Dee
 - **定时调度**：支持自动化每日运行
 - **个人持仓**：记录买入价、数量、目标价、止损、计划卖出日，并与当日推荐对照
 - **回测**：基于历史推荐记录，用 [AKQuant](https://github.com/akfamily/akquant) 做「推荐日收盘买、次日收盘卖」的回测，复盘时可评估策略表现
-- **Web 版**：FastAPI + Vue3，登录（手机号+密码）、首页每日预测、我的持仓、历史预测与复盘详情、回测、配置（AI Key / 修改密码）
+- **Web 版**：FastAPI + Vue3，无登录（开源版 AI Key 自行在设置中配置），底部导航：每日预测、持仓、历史、设置；设置页仅配置 AI（支持 DeepSeek / OpenAI / Claude，可用 LiteLLM 统一代理）
 
 ## 快速开始
 
@@ -27,9 +27,9 @@ A 股股票 + 基金每日智能推荐系统，基于多因子量化筛选 + Dee
 # 1. 安装依赖
 pip install -r requirements.txt
 
-# 2. 配置 API Key
+# 2. 配置 AI API Key（分析功能必填，支持 DeepSeek/OpenAI/Claude，可用 LiteLLM）
 cp .env.example .env
-# 编辑 .env，填入 DEEPSEEK_API_KEY
+# 编辑 .env，填入 AI_API_KEY（或沿用 DEEPSEEK_API_KEY），可选 AI_BASE_URL、AI_MODEL
 
 # 3. 执行推荐
 python main.py predict
@@ -60,20 +60,47 @@ python main.py schedule
 ```bash
 # 后端（在项目根目录）
 pip install -r requirements.txt   # 含 fastapi / sqlmodel 等
-# 可选：.env 中设置 WEB_SECRET_KEY（JWT 密钥，生产环境必改）
 python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 # 前端（另开终端）
 cd frontend
 npm install
 npm run dev
-# 浏览器打开 http://localhost:5173，先注册（手机号+密码）再登录
+# 浏览器打开 http://localhost:5173，无需登录；在「设置」中配置 AI API Key 后即可使用分析功能
 ```
 
-- **首页**：今日预测（依赖 CLI 已生成的当日推荐）
-- **我的持仓**：增删改持仓与卖出计划
-- **历史预测**：按日期筛选，进入某日可看预测+复盘详情，并可运行回测
-- **配置**：修改 DeepSeek API Key（写入 .env）、修改登录密码
+- **每日预测**：今日推荐（依赖 CLI 已生成的当日推荐）
+- **持仓**：增删改持仓与卖出计划
+- **历史**：按日期筛选，进入某日可看预测+复盘详情，并可运行回测
+- **设置**：仅配置 AI（API Key / Base URL / 模型），支持 DeepSeek、OpenAI、Claude；使用 LiteLLM 时选「自定义」并填代理地址
+
+### 服务器上用 PM2 管理后端
+
+后端支持用 [PM2](https://pm2.keymetrics.io/) 常驻运行，项目根目录已提供 `ecosystem.config.cjs`。
+
+**首次在服务器上：**
+
+```bash
+# 1. 进入项目根目录
+cd /path/to/my_stock_tols
+
+# 2. 确保依赖与 .env 已配置（pip install -r requirements.txt、复制 .env.example 为 .env 并填写 AI_API_KEY 等）
+
+# 3. 启动后端（PM2 会以后台进程运行，进程名为 stock-api）
+pm2 start ecosystem.config.cjs
+```
+
+**常用 PM2 命令：**
+
+```bash
+pm2 list              # 查看进程
+pm2 logs stock-api    # 看日志
+pm2 restart stock-api # 重启
+pm2 stop stock-api    # 停止
+pm2 delete stock-api  # 从 PM2 中移除
+```
+
+若使用虚拟环境，请编辑 `ecosystem.config.cjs`，把 `interpreter` 注释去掉并改为 venv 的 Python 路径（如 `.venv/bin/python`）。
 
 ## 项目结构
 
@@ -129,7 +156,27 @@ npm run dev
 
 - **数据源**: AKShare（东方财富/新浪行情；日 K 东财失败时用腾讯备选；市场要闻央视失败时用东财资讯备选）
 - **慢速拉取**: 可选 `SLOW_FETCH=true`（默认）拉长请求间隔，减轻限流、提高拉全率；`FETCH_INTERVAL_*` 可调间隔秒数
-- **AI 分析**: DeepSeek API
+- **AI 分析**: 统一 OpenAI 兼容接口，支持 DeepSeek / OpenAI / Claude；可配 Base URL + 模型，使用 LiteLLM 时填代理地址即可
 - **存储**: SQLite
 - **调度**: APScheduler
 - **日志**: Loguru
+
+
+### Capacitor 打包安卓（在 frontend 目录操作）
+
+用 WebView 包一层 Vue 打包结果，可调部分原生能力（相机、文件、推送等）。**以下命令均在 `frontend` 目录执行。**
+
+流程概览：
+1. 打包前端：`npm run build`
+2. 安装并初始化（若尚未做）：`npm i @capacitor/core @capacitor/cli @capacitor/android`，`npx cap init "股票推荐" "com.mystock.tools" --web-dir=dist`
+3. 添加 Android 平台：`npx cap add android`
+4. 每次改前端后同步：`npm run build` 再 `npx cap sync`（或 `npm run cap:sync`）
+5. 用 Android Studio 打开 `frontend/android` 目录，编译、签名、生成 APK/AAB
+
+优点：和 Vue/Vite 集成简单，官方文档全，生态成熟。
+
+注意：需安装 Android Studio 和 SDK。
+
+**前端请求的后端地址**：前端和后端在同一台服务器时，网页版用相对路径即可，无需改配置。**只有打包安卓 App 时**需要把接口地址写成服务器 URL：
+- **变量名**：`VITE_API_BASE`
+- **打包安卓时**在 frontend 目录执行：`VITE_API_BASE=https://你的域名 npm run build`，再 `npx cap sync`（不要结尾斜杠）。这样打出来的 App 会请求你这台服务器上的接口。

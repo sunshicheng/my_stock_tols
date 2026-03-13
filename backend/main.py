@@ -1,13 +1,12 @@
-"""FastAPI 应用入口 — 注册路由、CORS、初始化表。"""
+"""FastAPI 应用入口 — 注册路由、CORS、初始化表。开源版无登录，AI Key 在设置中配置。"""
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.database import init_web_tables
-from backend.deps import get_current_user
-from backend.routers import auth, positions, predictions, backtest, config
+from backend.routers import positions, predictions, backtest, config
 
-# 初始化 Web 表（users）
+# 初始化 Web 表（positions 等仍用 SQLite）
 init_web_tables()
 
 app = FastAPI(title="股票推荐 Web", version="0.1.0")
@@ -15,19 +14,15 @@ app = FastAPI(title="股票推荐 Web", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,  # 与 allow_origins=["*"] 不可同用；本接口用 JWT 头认证，无需 credentials
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 无需登录
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-
-# 需登录
-app.include_router(positions.router, prefix="/api/positions", tags=["positions"], dependencies=[Depends(get_current_user)])
-app.include_router(predictions.router, prefix="/api/predictions", tags=["predictions"], dependencies=[Depends(get_current_user)])
-app.include_router(backtest.router, prefix="/api/backtest", tags=["backtest"], dependencies=[Depends(get_current_user)])
-app.include_router(config.router, prefix="/api/config", tags=["config"], dependencies=[Depends(get_current_user)])
+app.include_router(positions.router, prefix="/api/positions", tags=["positions"])
+app.include_router(predictions.router, prefix="/api/predictions", tags=["predictions"])
+app.include_router(backtest.router, prefix="/api/backtest", tags=["backtest"])
+app.include_router(config.router, prefix="/api/config", tags=["config"])
 
 
 @app.get("/health")

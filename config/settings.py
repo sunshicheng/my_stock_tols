@@ -7,10 +7,17 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ---------- DeepSeek API ----------
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+# ---------- AI API（统一：支持 DeepSeek / OpenAI / Claude / LiteLLM）----------
+# 优先读 AI_*，仅当键未设置时回退到 DEEPSEEK_*；显式设为空字符串时不回退
+def _env(key: str, legacy: str, default: str = "") -> str:
+    val = os.getenv(key)
+    if val is not None:
+        return val
+    return os.getenv(legacy, default)
+
+AI_API_KEY = _env("AI_API_KEY", "DEEPSEEK_API_KEY", "")
+AI_BASE_URL = _env("AI_BASE_URL", "DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+AI_MODEL = _env("AI_MODEL", "DEEPSEEK_MODEL", "deepseek-chat")
 
 # ---------- Paths ----------
 DB_PATH = BASE_DIR / "data" / "recommendations.db"

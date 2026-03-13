@@ -8,17 +8,17 @@ from config.policy_themes import get_policy_themes_summary
 
 def _call_deepseek(prompt: str, system: str = "", temperature: float = 0.3, max_tokens: int = 2048) -> str:
     from openai import OpenAI
-    from config.settings import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
-    if not DEEPSEEK_API_KEY:
+    from config.settings import AI_API_KEY, AI_BASE_URL, AI_MODEL
+    if not AI_API_KEY:
         return ""
-    client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+    client = OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
     try:
         resp = client.chat.completions.create(
-            model=DEEPSEEK_MODEL,
+            model=AI_MODEL,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">股票推荐</string>
+    <string name="title_activity_main">股票推荐</string>
+    <string name="package_name">com.mystock.tools</string>
+    <string name="custom_url_scheme">com.mystock.tools</string>
+</resources>

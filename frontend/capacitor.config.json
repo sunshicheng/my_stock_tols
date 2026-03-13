@@ -1,0 +1,5 @@
+{
+  "appId": "com.mystock.tools",
+  "appName": "股票推荐",
+  "webDir": "dist"
+}

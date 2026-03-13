@@ -1,11 +1,13 @@
 <template>
   <div class="page">
     <h1>当日预测</h1>
-    <p class="date">交易日：{{ tradeDate }}</p>
 
     <!-- 一、今日推荐（预测） -->
     <section class="block">
-      <h2 class="block-title">今日推荐（预测）</h2>
+      <div class="block-head">
+        <h2 class="block-title">今日预测</h2>
+        <span class="date">日期：{{ tradeDate }}</span>
+      </div>
       <div v-if="loading" class="loading">加载中…</div>
       <template v-else>
         <div class="toolbar">
@@ -239,13 +241,13 @@ onUnmounted(() => {
 <style scoped>
   .page { max-width: 100%; }
   .page h1 { margin: 0 0 0.25rem; font-size: 1.35rem; }
-  .date { color: #666; font-size: 14px; margin: 0 0 1rem; }
-
   .block { margin-bottom: 2rem; }
-  .block-title { margin: 0 0 1rem; font-size: 1rem; font-weight: 600; color: #333; padding-bottom: 0.5rem; border-bottom: 1px solid #eee; }
+  .block-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #eee; }
+  .block-title { margin: 0; font-size: 1rem; font-weight: 600; color: #333; }
+  .block-head .date { color: #666; font-size: 14px; margin: 0; margin-left: auto; }
 
   .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; flex-wrap: wrap; }
-  .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; }
+  .btn { padding: 12px 18px; min-height: 44px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; touch-action: manipulation; }
   .btn.primary { background: #1989fa; color: #fff; }
   .btn:disabled { opacity: 0.7; cursor: not-allowed; }
   .error-msg { color: #ee0a24; font-size: 13px; }
@@ -312,10 +314,18 @@ onUnmounted(() => {
 
   .loading, .empty { padding: 2rem; text-align: center; color: #666; }
   .table-caption { margin: 0 0 0.5rem; font-size: 0.95rem; font-weight: 600; color: #333; }
-  .table-wrap { overflow: auto; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1rem; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1rem; }
   .table-wrap:last-of-type { margin-bottom: 0; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
   th { background: #fafafa; font-weight: 600; }
   .analysis { max-width: 320px; white-space: pre-wrap; word-break: break-all; }
+
+  @media (max-width: 768px) {
+    .page h1 { font-size: 1.2rem; }
+    .report-section, .review-section { padding: 1rem; margin-left: -0.5rem; margin-right: -0.5rem; border-radius: 12px; }
+    .stats-row { gap: 8px; }
+    .stat-card { min-width: 0; flex: 1; padding: 12px 14px; }
+    .table-wrap { margin-left: -0.5rem; margin-right: -0.5rem; border-radius: 0 0 12px 12px; }
+  }
 </style>

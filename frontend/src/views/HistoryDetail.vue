@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="header">
-      <router-link to="/history" class="back">← 返回列表</router-link>
+      <router-link to="/history" class="back touch-area">← 返回列表</router-link>
       <h1>预测与复盘 · {{ tradeDate }}</h1>
     </div>
     <div v-if="summary" class="summary">
@@ -73,7 +73,7 @@
         <input v-model="btStart" type="date" placeholder="开始日期" />
         <input v-model="btEnd" type="date" placeholder="结束日期" />
         <input v-model.number="btCash" type="number" step="10000" placeholder="初始资金" />
-        <button type="button" class="btn primary" :disabled="btLoading" @click="runBacktest">运行回测</button>
+        <button type="button" class="btn primary touch-btn" :disabled="btLoading" @click="runBacktest">运行回测</button>
       </div>
       <p v-if="btError" class="error">{{ btError }}</p>
       <div v-if="btResult" class="backtest-result">
@@ -159,22 +159,28 @@ async function runBacktest() {
   .header { margin-bottom: 1rem; }
   .back { color: #1989fa; text-decoration: none; font-size: 14px; }
   .back:hover { text-decoration: underline; }
+  .back.touch-area { display: inline-block; padding: 10px 0; min-height: 44px; line-height: 24px; -webkit-tap-highlight-color: transparent; }
   .page h1 { margin: 0.5rem 0 1rem; font-size: 1.25rem; }
   .summary { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; font-size: 14px; color: #555; }
   .section { margin-bottom: 2rem; }
   .section h2 { font-size: 1rem; margin: 0 0 0.75rem; }
-  .table-wrap { overflow: auto; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1rem; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1rem; }
+  table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
   th { background: #fafafa; font-weight: 600; }
   .analysis { max-width: 320px; white-space: pre-wrap; word-break: break-all; }
   .backtest-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
-  .backtest-form input { padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; }
-  .btn { padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+  .backtest-form input { padding: 12px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
+  .btn { padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; touch-action: manipulation; }
   .btn.primary { background: #1989fa; color: #fff; }
+  .touch-btn { min-height: 44px; }
   .btn:disabled { opacity: 0.7; cursor: not-allowed; }
   .error { color: #e74c3c; font-size: 13px; margin: 0 0 8px; }
   .backtest-result { background: #f9f9f9; padding: 1rem; border-radius: 8px; font-size: 14px; }
   .backtest-result ul { margin: 0.5rem 0 0; padding-left: 1.5rem; }
   .loading, .empty { padding: 2rem; text-align: center; color: #666; }
+  @media (max-width: 768px) {
+    .backtest-form { flex-direction: column; align-items: stretch; }
+    .backtest-form input { width: 100%; }
+  }
 </style>

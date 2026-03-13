@@ -3,15 +3,15 @@
 from openai import OpenAI
 from loguru import logger
 
-from config.settings import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+from config.settings import AI_API_KEY, AI_BASE_URL, AI_MODEL
 from core.news_fetcher import market_news_summary, policy_news_summary
 from core.zhouyi import zhouyi_summary_for_ai
 
 
 def _get_client() -> OpenAI:
-    if not DEEPSEEK_API_KEY:
-        raise ValueError("未配置 DEEPSEEK_API_KEY，请在 .env 文件中设置")
-    return OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+    if not AI_API_KEY:
+        raise ValueError("未配置 AI API Key，请在设置页或 .env 中配置 AI_API_KEY")
+    return OpenAI(api_key=AI_API_KEY, base_url=AI_BASE_URL)
 
 
 def _call_deepseek(prompt: str, system: str = "", temperature: float = 0.3) -> str:
@@ -22,7 +22,7 @@ def _call_deepseek(prompt: str, system: str = "", temperature: float = 0.3) -> s
     messages.append({"role": "user", "content": prompt})
     try:
         resp = client.chat.completions.create(
-            model=DEEPSEEK_MODEL,
+            model=AI_MODEL,
             messages=messages,
             temperature=temperature,
             max_tokens=4096,
